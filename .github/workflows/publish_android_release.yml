@@ -1,0 +1,109 @@
+name: Publish Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example v1.0.0)"
+        required: true
+        default: "v1.0.0"
+      title:
+        description: "Release title"
+        required: true
+        default: "OpenEnroth — Android Handheld Controller Fork v1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download tested ARM64 APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenEnroth-Android-ARM64
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 33314574024
+          path: release/arm64
+
+      - name: Download tested Universal APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: OpenEnroth-Android-Universal
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: 33314574024
+          path: release/universal
+
+      - name: Prepare release files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ARM64="$(find release/arm64 -type f -name '*.apk' | head -n 1)"
+          UNIVERSAL="$(find release/universal -type f -name '*.apk' | head -n 1)"
+          test -n "$ARM64"
+          test -n "$UNIVERSAL"
+          cp "$ARM64" OpenEnroth-Android-ARM64.apk
+          cp "$UNIVERSAL" OpenEnroth-Android-Universal.apk
+          sha256sum OpenEnroth-Android-ARM64.apk OpenEnroth-Android-Universal.apk > SHA256SUMS.txt
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.title }}
+        shell: bash
+        run: |
+          cat > release-notes.md <<'EOF'
+          This is the first tested release of the Android Handheld Controller fork of OpenEnroth.
+
+          It retains OpenEnroth's existing Android and touchscreen support while adding native physical-controller functionality intended particularly for Android retro handhelds and Android devices used with Bluetooth, USB or integrated gamepads.
+
+          Development and initial hardware testing have been performed on an Anbernic RG405M. The controller implementation uses SDL gamepad input rather than device-specific Android key codes, so other SDL-compatible Android controllers and handhelds should work, although they have not all been individually tested.
+
+          ## Changes
+
+          - Continuous physical gamepad input, including analogue movement, strafing, turning and looking.
+          - Correct gamepad remapping independently from keyboard bindings.
+          - R2 + touchscreen item/world-object inspection using the original right-click information behaviour.
+          - Item information remains visible after lifting the finger and closes when R2 is released.
+          - Suppression of duplicate SDL synthetic touch/mouse events that could otherwise cause an unwanted left click.
+          - Android software-keyboard support for genuine editable fields such as character and save-game naming.
+          - Android soft keyboard is suppressed for non-editable NPC dialogue, including branchless NPC messages.
+          - Ordinary touchscreen behaviour and upstream OpenEnroth Android support are retained.
+
+          ## Downloads
+
+          **OpenEnroth-Android-ARM64.apk — Recommended for modern Android handhelds**
+
+          Smaller ARM64-only package. Use this for the Anbernic RG405M and other ARM64 Android retro handhelds. This is the edition tested successfully on the RG405M.
+
+          **OpenEnroth-Android-Universal.apk — Maximum compatibility**
+
+          Larger package intended for broader Android CPU compatibility. Choose this if you are unsure which architecture your Android device uses. It contains the same game functionality; the additional size comes from carrying additional native binaries rather than extra game content.
+
+          `SHA256SUMS.txt` contains checksums for both APKs.
+
+          ## Installation
+
+          OpenEnroth does not include the copyrighted Might and Magic VII game data. A legitimate copy of the original game is still required. Follow the OpenEnroth Android installation instructions for supplying the required game files.
+
+          ## Compatibility
+
+          Confirmed on Anbernic RG405M with the ARM64 package, including integrated-controller operation, analogue movement/look, controller remapping, R2 + touchscreen inspection, Android text entry, and suppression of the soft keyboard for non-editable NPC dialogue.
+
+          Other SDL-compatible Android handhelds and Bluetooth/USB controllers are expected to work but have not all been individually verified.
+
+          This is a community fork release and is not an official upstream OpenEnroth release.
+          EOF
+
+          gh release create "$TAG" \
+            OpenEnroth-Android-ARM64.apk \
+            OpenEnroth-Android-Universal.apk \
+            SHA256SUMS.txt \
+            --target 91d8676d8e3ae7b69cbc5c373a217d4b2dc9b124 \
+            --title "$TITLE" \
+            --notes-file release-notes.md \
+            --latest
