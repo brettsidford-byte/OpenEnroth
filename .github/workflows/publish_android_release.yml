@@ -19,6 +19,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Download tested ARM64 APK artifact
         uses: actions/download-artifact@v4
         with:
