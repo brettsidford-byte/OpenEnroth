@@ -397,7 +397,15 @@ void Io::KeyboardInputHandler::StartTextInput(TextInputType type, int max_string
     }
 
 #ifdef __ANDROID__
-    if ((type == TextInputType::Text || type == TextInputType::Number) && window != nullptr) {
+    // OpenEnroth also uses its text-input handler for some non-editable UI states,
+    // notably branchless NPC dialogue. Only summon Android's IME on screens where
+    // the player is actually expected to type.
+    bool shouldOpenSoftKeyboard = current_screen_type == SCREEN_PARTY_CREATION ||
+                                  current_screen_type == SCREEN_SAVEGAME ||
+                                  current_screen_type == SCREEN_INPUT_BLV;
+    if (shouldOpenSoftKeyboard &&
+        (type == TextInputType::Text || type == TextInputType::Number) &&
+        window != nullptr) {
         if (SDL_Window *sdlWindow = SDL_GetKeyboardFocus()) {
             SDL_StartTextInput(sdlWindow);
         }
