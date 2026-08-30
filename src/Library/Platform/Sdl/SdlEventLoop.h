@@ -43,5 +43,8 @@ class SdlEventLoop: public PlatformEventLoop {
 #ifdef __ANDROID__
     bool _rightTriggerHeld = false;
     bool _touchUsesRightButton = false;
+    bool _rightMouseLatched = false;
+    PlatformWindow *_rightMouseWindow = nullptr;
+    Pointi _rightMousePos;
 #endif
 };
