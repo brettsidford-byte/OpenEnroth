@@ -11,9 +11,6 @@ on:
         description: "Release title"
         required: true
         default: "OpenEnroth — Android Handheld Controller Fork v1.0.1"
-  push:
-    paths:
-      - ".github/workflows/publish_android_release.yml"
 
 permissions:
   contents: write
@@ -60,8 +57,8 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'v1.0.1' }}
-          TITLE: ${{ github.event_name == 'workflow_dispatch' && inputs.title || 'OpenEnroth — Android Handheld Controller Fork v1.0.1' }}
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.title }}
         shell: bash
         run: |
           cat > release-notes.md <<'EOF'
