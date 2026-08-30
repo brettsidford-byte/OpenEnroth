@@ -11,6 +11,12 @@ std::shared_ptr<Io::KeyboardActionMapping> keyboardActionMapping = nullptr;
 
 extern std::unordered_set<InputAction> key_map_conflicted;  // 506E6C
 
+namespace {
+bool isGamepadKey(PlatformKey key) {
+    return key >= PlatformKey::KEY_GAMEPAD_A && key <= PlatformKey::KEY_GAMEPAD_R2;
+}
+}
+
 //----- (00459C8D) --------------------------------------------------------
 Io::KeyboardActionMapping::KeyboardActionMapping(std::shared_ptr<GameConfig> config) : _config(config) {
     auto fill = [] (const ConfigSection &section, auto *mapping) {
@@ -61,6 +67,31 @@ Io::Keybindings Io::KeyboardActionMapping::defaultKeybindings(KeybindingsQuery q
 }
 
 void Io::KeyboardActionMapping::applyKeybindings(const Io::Keybindings &keybindings) {
-    for (const auto &[inputAction, key] : keybindings)
-        _keyboardEntryByInputAction[inputAction]->setValue(key);
+    for (const auto &[inputAction, key] : keybindings) {
+        KeyConfigEntry *keyboardEntry = valueOr(_keyboardEntryByInputAction, inputAction, nullptr);
+
+        if (!isGamepadKey(key)) {
+            if (keyboardEntry)
+                keyboardEntry->setValue(key);
+            continue;
+        }
+
+        KeyConfigEntry *gamepadEntry = valueOr(_gamepadEntryByInputAction, inputAction, nullptr);
+        if (!gamepadEntry)
+            continue;
+
+        // The controls UI historically stored captured gamepad keys in the keyboard map.
+        // Repair such an entry while moving the assignment into the real gamepad map.
+        if (keyboardEntry && isGamepadKey(keyboardEntry->value()))
+            keyboardEntry->setValue(keyboardEntry->defaultValue());
+
+        // A physical gamepad control should belong to one configurable action. Reassigning it
+        // therefore removes the old gamepad binding instead of leaving both actions active.
+        for (const auto &[otherAction, otherEntry] : _gamepadEntryByInputAction) {
+            if (otherAction != inputAction && otherEntry->value() == key)
+                otherEntry->setValue(PlatformKey::KEY_NONE);
+        }
+
+        gamepadEntry->setValue(key);
+    }
 }
