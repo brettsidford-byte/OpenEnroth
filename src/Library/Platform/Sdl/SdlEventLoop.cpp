@@ -222,6 +222,9 @@ void SdlEventLoop::dispatchTouchFingerEvent(PlatformEventHandler *eventHandler, 
         return; // This happens.
 
     PlatformMouseEvent e;
+    e.window = _state->window(event->windowID);
+    e.pos = Pointi(event->x * e.window->size().w, event->y * e.window->size().h);
+
     switch (event->type) {
     case SDL_EVENT_FINGER_DOWN:
         e.type = EVENT_MOUSE_BUTTON_PRESS;
@@ -229,6 +232,11 @@ void SdlEventLoop::dispatchTouchFingerEvent(PlatformEventHandler *eventHandler, 
         _touchUsesRightButton = _rightTriggerHeld;
         e.button = _touchUsesRightButton ? BUTTON_RIGHT : BUTTON_LEFT;
         e.buttons = e.button;
+        if (_touchUsesRightButton) {
+            _rightMouseLatched = true;
+            _rightMouseWindow = e.window;
+            _rightMousePos = e.pos;
+        }
 #else
         e.button = BUTTON_LEFT;
         e.buttons = BUTTON_LEFT;
@@ -237,34 +245,32 @@ void SdlEventLoop::dispatchTouchFingerEvent(PlatformEventHandler *eventHandler, 
         // then we'd also need to get touch state from inside the mouse event.
         break;
     case SDL_EVENT_FINGER_UP:
-        e.type = EVENT_MOUSE_BUTTON_RELEASE;
 #ifdef __ANDROID__
-        e.button = _touchUsesRightButton ? BUTTON_RIGHT : BUTTON_LEFT;
-#else
-        e.button = BUTTON_LEFT;
+        if (_touchUsesRightButton) {
+            _touchUsesRightButton = false;
+            return; // R2 release will send the matching right-button release.
+        }
 #endif
+        e.type = EVENT_MOUSE_BUTTON_RELEASE;
+        e.button = BUTTON_LEFT;
         break;
     case SDL_EVENT_FINGER_MOTION:
         e.type = EVENT_MOUSE_MOVE;
 #ifdef __ANDROID__
-        if (_touchUsesRightButton)
+        if (_touchUsesRightButton) {
             e.buttons = BUTTON_RIGHT;
-        else
+            _rightMouseWindow = e.window;
+            _rightMousePos = e.pos;
+        } else {
             e.buttons = BUTTON_LEFT;
+        }
 #endif
         break;
     default:
         return;
     }
-    e.window = _state->window(event->windowID);
-    e.pos = Pointi(event->x * e.window->size().w, event->y * e.window->size().h);
 
     dispatchEvent(eventHandler, &e);
-
-#ifdef __ANDROID__
-    if (event->type == SDL_EVENT_FINGER_UP)
-        _touchUsesRightButton = false;
-#endif
 }
 
 void SdlEventLoop::dispatchWindowEvent(PlatformEventHandler *eventHandler, const SDL_WindowEvent *event) {
@@ -369,8 +375,21 @@ void SdlEventLoop::dispatchGamepadAxisEvent(PlatformEventHandler *eventHandler, 
         return;
 
 #ifdef __ANDROID__
-    if (e.axis == PlatformKey::KEY_GAMEPAD_R2)
-        _rightTriggerHeld = e.value > 0.5f;
+    if (e.axis == PlatformKey::KEY_GAMEPAD_R2) {
+        bool rightTriggerHeld = e.value > 0.5f;
+        if (_rightTriggerHeld && !rightTriggerHeld && _rightMouseLatched && _rightMouseWindow) {
+            PlatformMouseEvent mouseEvent;
+            mouseEvent.type = EVENT_MOUSE_BUTTON_RELEASE;
+            mouseEvent.window = _rightMouseWindow;
+            mouseEvent.button = BUTTON_RIGHT;
+            mouseEvent.pos = _rightMousePos;
+            dispatchEvent(eventHandler, &mouseEvent);
+
+            _rightMouseLatched = false;
+            _rightMouseWindow = nullptr;
+        }
+        _rightTriggerHeld = rightTriggerHeld;
+    }
 #endif
 
     dispatchEvent(eventHandler, &e);
