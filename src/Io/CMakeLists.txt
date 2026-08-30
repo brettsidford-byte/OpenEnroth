@@ -17,4 +17,8 @@ set(IO_HEADERS
 
 add_library(io STATIC ${IO_SOURCES} ${IO_HEADERS})
 target_link_libraries(io PUBLIC library_serialization)
+if(ANDROID)
+    # KeyboardInputHandler uses SDL's text-input API on Android to open/close the IME.
+    target_link_libraries(io PRIVATE SDL3::SDL3OE)
+endif()
 target_check_style(io)
