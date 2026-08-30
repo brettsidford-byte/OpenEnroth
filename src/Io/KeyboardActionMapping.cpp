@@ -35,6 +35,16 @@ PlatformKey Io::KeyboardActionMapping::keyFor(InputAction action) const {
 }
 
 PlatformKey Io::KeyboardActionMapping::gamepadKeyFor(InputAction action) const {
+#ifdef __ANDROID__
+    // Keep New Game touch-only on Android handhelds and use A for the visible
+    // Controls/Options menu entry. This is deliberately limited to the menu
+    // action mapping, so A remains the normal INTERACT button during gameplay.
+    if (action == INPUT_ACTION_NEW_GAME)
+        return PlatformKey::KEY_NONE;
+    if (action == INPUT_ACTION_OPEN_OPTIONS)
+        return PlatformKey::KEY_GAMEPAD_A;
+#endif
+
     KeyConfigEntry *entry = valueOr(_gamepadEntryByInputAction, action, nullptr);
     return entry ? entry->value() : PlatformKey::KEY_NONE;
 }
