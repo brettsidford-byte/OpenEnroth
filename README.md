@@ -1,4 +1,20 @@
-# OpenEnroth
+# OpenEnroth — Android Handheld Controller Fork
+
+> **About this fork**
+>
+> This repository is a fork of the official [OpenEnroth](https://github.com/OpenEnroth/OpenEnroth) project. It keeps
+> the upstream OpenEnroth engine and Android support while adding native physical-controller support aimed at Android
+> retro handhelds and other Android devices used with a gamepad.
+>
+> The handheld work currently includes continuous analogue-stick movement/look input, gamepad remapping that is kept
+> separate from keyboard bindings, touchscreen-assisted item inspection using an R2 modifier, and Android text-input
+> integration. Development and testing have primarily targeted the Anbernic RG405M. Other Android handhelds and
+> controller-equipped Android devices should benefit from the same SDL gamepad support, but they should be considered
+> **compatible in principle rather than individually verified** until tested.
+>
+> The intention is to remain close to upstream OpenEnroth so these handheld-specific changes can be maintained as a
+> small portable patch set and reapplied to future official releases. General OpenEnroth development, documentation,
+> releases and community support remain with the upstream project.
 
 [![Windows](https://github.com/OpenEnroth/OpenEnroth/workflows/Windows/badge.svg)](https://github.com/OpenEnroth/OpenEnroth/actions/workflows/windows.yml) 
 [![Linux](https://github.com/OpenEnroth/OpenEnroth/workflows/Linux/badge.svg)](https://github.com/OpenEnroth/OpenEnroth/actions/workflows/linux.yml) 
@@ -18,14 +34,17 @@ Supported platforms: **Windows**, **Linux**, **macOS**, and **Android** (experim
 
 # Download
 
-Prebuilt binaries are available from our [releases page](https://github.com/OpenEnroth/OpenEnroth/releases).
+Official upstream binaries are available from the [OpenEnroth releases page](https://github.com/OpenEnroth/OpenEnroth/releases).
 
-Currently only nightly builds are available, which may have bugs. A stable release is in progress — see the
+Handheld-test APKs produced by this fork are built through this repository's Android ARM64 GitHub Actions workflow.
+They are development/test builds rather than official OpenEnroth releases.
+
+Currently only upstream nightly builds are available, which may have bugs. A stable release is in progress — see the
 [v0.1 milestone](https://github.com/OpenEnroth/OpenEnroth/milestone/1).
 
 # Discord
 
-Join our Discord to discuss, track progress, or get involved in development.
+Join the upstream OpenEnroth Discord to discuss, track progress, or get involved in development.
 
 [![Discord channel invite](https://img.shields.io/badge/chat-on%20discord-green.svg)](https://discord.gg/jRCyPtq) 
 
@@ -119,22 +138,39 @@ control over install location. Requires Ubuntu 24.04 or a distribution with comp
 
 ### Android (Experimental)
 
-Android is not actively tested by the dev team — expect issues and be prepared to troubleshoot.
+This fork retains the upstream Android implementation and adds physical-controller/retro-handheld support on top of
+it. It is **not** intended to replace touchscreen support with a handheld-only interface. Keeping the upstream Android
+path means conventional Android phones and tablets can continue to use the existing touch behaviour, while devices
+with SDL-recognised gamepads gain the additional controller mappings.
 
-1. Download `openenroth-release.apk` from the [releases page](https://github.com/OpenEnroth/OpenEnroth/releases).
+The current handheld APK workflow is ARM64-only. That is suitable for the RG405M and many modern Android devices, but
+it is not a universal Android package: devices requiring another ABI should use an upstream build or a future
+multi-architecture build of this fork.
+
+Controller behaviour has been tested primarily on the Anbernic RG405M. Because input is implemented through SDL's
+standard gamepad events rather than device-specific Android key codes, it should also work with many built-in and
+Bluetooth/USB Android controllers. Different vendors can expose unusual button/axis mappings, so reports from other
+hardware are welcome.
+
+For the official Android build:
+
+1. Download `openenroth-release.apk` from the [upstream releases page](https://github.com/OpenEnroth/OpenEnroth/releases).
 2. Install the APK on your device (you will need to allow installation from unknown sources in your device settings).
 3. Copy the game data (`ANIMS`, `DATA`, `MUSIC` and `SOUNDS`) to
    `/sdcard/Android/data/io.github.openenroth.openenroth/files/` on your device.
 
+Note that development APKs from this fork may use a different Android application ID/signing identity from current
+upstream builds, so their application-data path and upgrade behaviour can differ.
+
 
 # Development
 
-See [HACKING.md](HACKING.md) for build instructions, code style guidelines, and contribution guidelines.
+See [HACKING.md](HACKING.md) for upstream build instructions, code style guidelines, and contribution guidelines.
 
 
 # Screenshots
 
-![screenshot_1](https://user-images.githubusercontent.com/24377109/79051879-f04cde80-7c32-11ea-939d-1dcc97b46f5d.png)
+![screenshot_1](https://user-images.githubusercontent.com/24377109/79051879-f04cde80-7c32-11ea-85c7-f9120b7d79dd.png)
 
 ![screenshot_2](https://user-images.githubusercontent.com/24377109/79051881-f17e0b80-7c32-11ea-82cd-5e4993a1c071.png)
 
