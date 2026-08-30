@@ -1,11 +1,13 @@
-name: Android ARM64 Test APK
+name: Android Release APKs
 
 on:
-  pull_request:
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 concurrency:
-  group: android-arm64-test-${{ github.event.pull_request.number || github.ref }}
+  group: android-release-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -13,9 +15,20 @@ env:
   CCACHE_COMPILERCHECK: content
 
 jobs:
-  build_android_arm64:
+  build_android:
     runs-on: ubuntu-26.04
-    timeout-minutes: 60
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ARM64
+            arch: arm64-v8a
+            artifact: OpenEnroth-Android-ARM64
+          - name: Universal
+            arch: universal
+            artifact: OpenEnroth-Android-Universal
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5.0.0
@@ -29,6 +42,12 @@ jobs:
         run: |
           /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "ndk;$NDK_VERSION"
 
+      - name: Install universal-build dependencies
+        if: matrix.arch == 'universal'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib
+
       - name: Setup Java
         uses: actions/setup-java@v5.0.0
         with:
@@ -38,30 +57,32 @@ jobs:
       - name: Run ccache
         uses: hendrikmuhs/ccache-action@v1.2.18
         with:
-          key: android-Debug-universal
+          key: android-release-${{ matrix.arch }}
           verbose: 2
           max-size: 800M
-          save: false
+          save: true
 
-      - name: Build ARM64 debug APK
+      - name: Build ${{ matrix.name }} debug APK
         uses: burrunan/gradle-cache-action@v3.0.1
         with:
           build-root-directory: android
-          job-id: android-Debug
+          job-id: android-Debug-${{ matrix.arch }}
           arguments: assembleDebug --info -Pandroid.native.buildOutput=verbose
-          read-only: true
+          read-only: false
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: 4
-          GITHUBARCH: arm64-v8a
+          GITHUBARCH: ${{ matrix.arch }}
 
-      - name: Verify APK
+      - name: Prepare named APK
         run: |
-          ls -lh android/openenroth/build/outputs/apk/debug/openenroth-debug.apk
+          mkdir -p dist
+          cp android/openenroth/build/outputs/apk/debug/openenroth-debug.apk "dist/${{ matrix.artifact }}.apk"
+          ls -lh "dist/${{ matrix.artifact }}.apk"
 
-      - name: Upload ARM64 test APK
+      - name: Upload ${{ matrix.name }} APK
         uses: actions/upload-artifact@v4
         with:
-          name: openenroth-android-arm64-debug
-          path: android/openenroth/build/outputs/apk/debug/openenroth-debug.apk
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
