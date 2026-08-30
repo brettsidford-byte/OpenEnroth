@@ -162,6 +162,14 @@ void SdlEventLoop::dispatchMouseMoveEvent(PlatformEventHandler *eventHandler, co
     if (event->windowID == 0)
         return; // This happens.
 
+#ifdef __ANDROID__
+    // SDL already generates virtual mouse events for touchscreen input. We handle
+    // SDL touch events ourselves below, so forwarding these as well would make a
+    // single finger tap arrive twice (including as a synthetic left click).
+    if (event->which == SDL_TOUCH_MOUSEID)
+        return;
+#endif
+
     PlatformMouseEvent e;
     e.type = EVENT_MOUSE_MOVE;
     e.window = _state->window(event->windowID);
@@ -177,6 +185,14 @@ void SdlEventLoop::dispatchMouseMoveEvent(PlatformEventHandler *eventHandler, co
 void SdlEventLoop::dispatchMouseButtonEvent(PlatformEventHandler *eventHandler, const SDL_MouseButtonEvent *event) {
     if (event->windowID == 0)
         return; // This happens.
+
+#ifdef __ANDROID__
+    // Ignore SDL's virtual mouse copy of a touchscreen event. The original touch
+    // event is converted explicitly in dispatchTouchFingerEvent(), which lets R2
+    // replace the normal tap with a right-click instead of receiving both.
+    if (event->which == SDL_TOUCH_MOUSEID)
+        return;
+#endif
 
     PlatformMouseEvent e;
     e.type = event->type == SDL_EVENT_MOUSE_BUTTON_UP ? EVENT_MOUSE_BUTTON_RELEASE : EVENT_MOUSE_BUTTON_PRESS;
@@ -222,25 +238,53 @@ void SdlEventLoop::dispatchTouchFingerEvent(PlatformEventHandler *eventHandler, 
         return; // This happens.
 
     PlatformMouseEvent e;
+    e.window = _state->window(event->windowID);
+    e.pos = Pointi(event->x * e.window->size().w, event->y * e.window->size().h);
+
     switch (event->type) {
     case SDL_EVENT_FINGER_DOWN:
         e.type = EVENT_MOUSE_BUTTON_PRESS;
+#ifdef __ANDROID__
+        _touchUsesRightButton = _rightTriggerHeld;
+        e.button = _touchUsesRightButton ? BUTTON_RIGHT : BUTTON_LEFT;
+        e.buttons = e.button;
+        if (_touchUsesRightButton) {
+            _rightMouseLatched = true;
+            _rightMouseWindow = e.window;
+            _rightMousePos = e.pos;
+        }
+#else
         e.button = BUTTON_LEFT;
-        e.buttons = BUTTON_LEFT; // Not calling SDL_GetMouseState here because if we want buttons to sync up properly
-                                 // then we'd also need to get touch state from inside the mouse event.
+        e.buttons = BUTTON_LEFT;
+#endif
+        // Not calling SDL_GetMouseState here because if we want buttons to sync up properly
+        // then we'd also need to get touch state from inside the mouse event.
         break;
     case SDL_EVENT_FINGER_UP:
+#ifdef __ANDROID__
+        if (_touchUsesRightButton) {
+            _touchUsesRightButton = false;
+            return; // R2 release will send the matching right-button release.
+        }
+#endif
         e.type = EVENT_MOUSE_BUTTON_RELEASE;
         e.button = BUTTON_LEFT;
         break;
     case SDL_EVENT_FINGER_MOTION:
         e.type = EVENT_MOUSE_MOVE;
+#ifdef __ANDROID__
+        if (_touchUsesRightButton) {
+            e.buttons = BUTTON_RIGHT;
+            _rightMouseWindow = e.window;
+            _rightMousePos = e.pos;
+        } else {
+            e.buttons = BUTTON_LEFT;
+        }
+#endif
         break;
     default:
         return;
     }
-    e.window = _state->window(event->windowID);
-    e.pos = Pointi(event->x * e.window->size().w, event->y * e.window->size().h);
 
     dispatchEvent(eventHandler, &e);
 }
@@ -345,6 +389,24 @@ void SdlEventLoop::dispatchGamepadAxisEvent(PlatformEventHandler *eventHandler, 
 
     if (!e.gamepad || e.axis == PlatformKey::KEY_NONE)
         return;
+
+#ifdef __ANDROID__
+    if (e.axis == PlatformKey::KEY_GAMEPAD_R2) {
+        bool rightTriggerHeld = e.value > 0.5f;
+        if (_rightTriggerHeld && !rightTriggerHeld && _rightMouseLatched && _rightMouseWindow) {
+            PlatformMouseEvent mouseEvent;
+            mouseEvent.type = EVENT_MOUSE_BUTTON_RELEASE;
+            mouseEvent.window = _rightMouseWindow;
+            mouseEvent.button = BUTTON_RIGHT;
+            mouseEvent.pos = _rightMousePos;
+            dispatchEvent(eventHandler, &mouseEvent);
+
+            _rightMouseLatched = false;
+            _rightMouseWindow = nullptr;
+        }
+        _rightTriggerHeld = rightTriggerHeld;
+    }
+#endif
 
     dispatchEvent(eventHandler, &e);
 }

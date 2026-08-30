@@ -40,4 +40,11 @@ class SdlEventLoop: public PlatformEventLoop {
  private:
     SdlPlatformSharedState *_state = nullptr;
     bool _quitRequested = false;
+#ifdef __ANDROID__
+    bool _rightTriggerHeld = false;
+    bool _touchUsesRightButton = false;
+    bool _rightMouseLatched = false;
+    PlatformWindow *_rightMouseWindow = nullptr;
+    Pointi _rightMousePos = {};
+#endif
 };

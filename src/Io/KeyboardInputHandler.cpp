@@ -3,6 +3,10 @@
 #include <memory>
 #include <string>
 
+#ifdef __ANDROID__
+#include <SDL3/SDL.h>
+#endif
+
 #include "Engine/Graphics/Indoor.h"
 #include "Engine/Graphics/Weather.h"
 #include "Engine/Objects/Actor.h"
@@ -391,9 +395,23 @@ void Io::KeyboardInputHandler::StartTextInput(TextInputType type, int max_string
     if (window != nullptr) {
         window->keyboard_input_status = WINDOW_INPUT_IN_PROGRESS;
     }
+
+#ifdef __ANDROID__
+    if ((type == TextInputType::Text || type == TextInputType::Number) && window != nullptr) {
+        if (SDL_Window *sdlWindow = SDL_GetKeyboardFocus()) {
+            SDL_StartTextInput(sdlWindow);
+        }
+    }
+#endif
 }
 
 void Io::KeyboardInputHandler::EndTextInput() {
+#ifdef __ANDROID__
+    if (SDL_Window *sdlWindow = SDL_GetKeyboardFocus()) {
+        SDL_StopTextInput(sdlWindow);
+    }
+#endif
+
     if (window != nullptr) {
         window->keyboard_input_status = WINDOW_INPUT_NONE;
         window = nullptr;
@@ -410,6 +428,14 @@ void Io::KeyboardInputHandler::EndTextInput(GUIWindow *window) {
 
 //----- (00459ED1) --------------------------------------------------------
 void Io::KeyboardInputHandler::SetWindowInputStatus(WindowInputStatus status) {
+#ifdef __ANDROID__
+    if (status != WINDOW_INPUT_IN_PROGRESS) {
+        if (SDL_Window *sdlWindow = SDL_GetKeyboardFocus()) {
+            SDL_StopTextInput(sdlWindow);
+        }
+    }
+#endif
+
     inputType = TextInputType::None;
     if (window) {
         window->keyboard_input_status = status;

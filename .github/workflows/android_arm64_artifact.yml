@@ -1,0 +1,67 @@
+name: Android ARM64 Test APK
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-arm64-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: 28.1.13356709
+  CCACHE_COMPILERCHECK: content
+
+jobs:
+  build_android_arm64:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5.0.0
+        with:
+          submodules: recursive
+
+      - name: Configure fast APT mirror
+        uses: vegardit/fast-apt-mirror.sh@v1
+
+      - name: Install NDK
+        run: |
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "ndk;$NDK_VERSION"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5.0.0
+        with:
+          distribution: temurin
+          java-version: 17.0.6
+
+      - name: Run ccache
+        uses: hendrikmuhs/ccache-action@v1.2.18
+        with:
+          key: android-Debug-universal
+          verbose: 2
+          max-size: 800M
+          save: false
+
+      - name: Build ARM64 debug APK
+        uses: burrunan/gradle-cache-action@v3.0.1
+        with:
+          build-root-directory: android
+          job-id: android-Debug
+          arguments: assembleDebug --info -Pandroid.native.buildOutput=verbose
+          read-only: true
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 4
+          GITHUBARCH: arm64-v8a
+
+      - name: Verify APK
+        run: |
+          ls -lh android/openenroth/build/outputs/apk/debug/openenroth-debug.apk
+
+      - name: Upload ARM64 test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openenroth-android-arm64-debug
+          path: android/openenroth/build/outputs/apk/debug/openenroth-debug.apk
+          if-no-files-found: error
+          retention-days: 14
