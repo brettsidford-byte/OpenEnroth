@@ -5,6 +5,7 @@
 #include "Library/Platform/Interface/PlatformEvents.h"
 
 namespace {
+// Match the digital threshold used by GameWindowHandler for the first controller validation build.
 constexpr float GAMEPAD_AXIS_THRESHOLD = 0.5f;
 }
 
