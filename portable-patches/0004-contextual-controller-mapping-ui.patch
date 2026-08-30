@@ -1,0 +1,152 @@
+diff --git a/src/GUI/UI/UIGame.cpp b/src/GUI/UI/UIGame.cpp
+--- a/src/GUI/UI/UIGame.cpp
++++ b/src/GUI/UI/UIGame.cpp
+@@ -48,6 +48,7 @@
+ #include "GUI/UI/UISpellbook.h"
+ 
+ #include "Io/InputEnumFunctions.h"
++#include "Io/InputActionContexts.h"
+ #include "Io/Mouse.h"
+@@ -338,8 +339,8 @@ GUIWindow_GameKeyBindings::GUIWindow_GameKeyBindings()
+     CreateButton({241, 302}, {214, 40}, BUTTON_TYPE_NORMAL, 0, UIMSG_Escape, 0);
+ 
++    // These are Previous/Next context-page controls; the legacy messages are reused.
+     CreateButton({19, 302}, {108, 20}, BUTTON_TYPE_NORMAL, 0, UIMSG_SelectKeyPage1, 0);
+     CreateButton({127, 302}, {108, 20}, BUTTON_TYPE_NORMAL, 0, UIMSG_SelectKeyPage2, 0);
+@@ -368,7 +369,7 @@ GUIWindow_GameKeyBindings::GUIWindow_GameKeyBindings()
+     KeyboardPageNum = 1;
+ 
+     key_map_conflicted.clear();
+-    curr_key_map = keyboardActionMapping->currentKeybindings(KEYBINDINGS_CONFIGURABLE);
++    curr_key_map = keyboardActionMapping->currentKeybindings(KEYBINDINGS_ALL);
+ }
+@@ -386,7 +387,8 @@ void GUIWindow_GameKeyBindings::Update() {
+         bool anyConflicts = false;
+         for (auto x : curr_key_map) {
+             for (auto y : curr_key_map) {
+-                if (x.first != y.first && x.second == y.second) {
++                if (x.first != y.first && x.second != PlatformKey::KEY_NONE && x.second == y.second &&
++                    inputActionsShareContext(x.first, y.first)) {
+                     key_map_conflicted.insert(x.first);
+                     key_map_conflicted.insert(y.first);
+                     anyConflicts = true;
+@@ -407,24 +409,30 @@ void GUIWindow_GameKeyBindings::Update() {
+     }
+     render->DrawQuad2D(game_ui_options_controls[0], {8, 8});  // draw base texture
+ 
+-    int base_controls_offset = 0;
+-    if (KeyboardPageNum == 1) {
+-        render->DrawQuad2D(game_ui_options_controls[3], {19, 302});
+-    } else {
+-        base_controls_offset = 14;
+-        render->DrawQuad2D(game_ui_options_controls[4], {127, 302});
+-    }
++    const InputActionPage &page = inputActionPage(KeyboardPageNum);
++
++    // The original screen had two anonymous page buttons. Keep their large touch
++    // targets but make navigation and the active input context explicit.
++    DrawText(assets->pFontLucida.get(), {20, 306}, ui_gamemenu_keys_action_name_color, "< PREV", pGUIWindow_CurrentMenu->frameRect);
++    DrawText(assets->pFontLucida.get(), {150, 306}, ui_gamemenu_keys_action_name_color, "NEXT >", pGUIWindow_CurrentMenu->frameRect);
++    DrawText(assets->pFontLucida.get(), {190, 118}, ui_gamemenu_keys_action_name_color, page.title, pGUIWindow_CurrentMenu->frameRect);
+ 
+-    for (int i = 0; i < 7; ++i) {
+-        InputAction action1 = (InputAction)(base_controls_offset + i);
+-        DrawText(assets->pFontLucida.get(), {23, 142 + i * 21}, ui_gamemenu_keys_action_name_color, GetDisplayName(action1), pGUIWindow_CurrentMenu->frameRect);
+-        DrawText(assets->pFontLucida.get(), {127, 142 + i * 21}, GameMenuUI_GetKeyBindingColor(action1), GetDisplayName(curr_key_map[action1]), pGUIWindow_CurrentMenu->frameRect);
++    for (int row = 0; row < static_cast<int>(page.count); ++row) {
++        InputAction action = page.actions[row];
++        int column = row / 7;
++        int line = row % 7;
++        int actionX = column == 0 ? 23 : 247;
++        int keyX = column == 0 ? 127 : 350;
++        int y = 142 + line * 21;
+ 
+-        int j = i + 7;
+-        InputAction action2 = (InputAction)(base_controls_offset + j);
+-        DrawText(assets->pFontLucida.get(), {247, 142 + i * 21}, ui_gamemenu_keys_action_name_color, GetDisplayName(action2), pGUIWindow_CurrentMenu->frameRect);
+-        DrawText(assets->pFontLucida.get(), {350, 142 + i * 21}, GameMenuUI_GetKeyBindingColor(action2), GetDisplayName(curr_key_map[action2]), pGUIWindow_CurrentMenu->frameRect);
++        DrawText(assets->pFontLucida.get(), {actionX, y}, ui_gamemenu_keys_action_name_color,
++                 GetDisplayName(action), pGUIWindow_CurrentMenu->frameRect);
++        DrawText(assets->pFontLucida.get(), {keyX, y}, GameMenuUI_GetKeyBindingColor(action),
++                 GetDisplayName(curr_key_map[action]), pGUIWindow_CurrentMenu->frameRect);
+     }
+ }
+diff --git a/src/Application/GameMenu.cpp b/src/Application/GameMenu.cpp
+--- a/src/Application/GameMenu.cpp
++++ b/src/Application/GameMenu.cpp
+@@ -20,6 +20,7 @@
+ #include "Library/Platform/Interface/PlatformEnums.h"
+ #include "Io/InputEnums.h"
++#include "Io/InputActionContexts.h"
+ #include "Io/KeyboardInputHandler.h"
+@@ -188,10 +189,12 @@ void Menu::EventLoop() {
+                 if (currently_selected_action_for_binding != INPUT_ACTION_INVALID) {
+                     pAudioPlayer->playUISound(SOUND_error);
+                 } else {
+-                    currently_selected_action_for_binding = (InputAction)param;
+-                    if (KeyboardPageNum != 1)
+-                        currently_selected_action_for_binding = (InputAction)(param + 14);
++                    currently_selected_action_for_binding = inputActionForBindingRow(KeyboardPageNum, param);
++                    if (currently_selected_action_for_binding == INPUT_ACTION_INVALID) {
++                        pAudioPlayer->playUISound(SOUND_error);
++                        continue;
++                    }
+                     keyboardInputHandler->StartTextInput(TextInputType::Text, 1, pGUIWindow_CurrentMenu.get());
+                 }
+                 continue;
+@@ -199,7 +202,7 @@ void Menu::EventLoop() {
+ 
+             case UIMSG_ResetKeyMapping: {
+-                curr_key_map = keyboardActionMapping->defaultKeybindings(KEYBINDINGS_CONFIGURABLE);
++                curr_key_map = keyboardActionMapping->defaultKeybindings(KEYBINDINGS_ALL);
+                 keyboardActionMapping->applyKeybindings(curr_key_map);
+                 key_map_conflicted.clear();
+                 pAudioPlayer->playUISound(SOUND_chimes);
+@@ -208,10 +211,14 @@ void Menu::EventLoop() {
+             }
+ 
+             case UIMSG_SelectKeyPage1:
+-                KeyboardPageNum = 1;
++                KeyboardPageNum--;
++                if (KeyboardPageNum < 1)
++                    KeyboardPageNum = static_cast<int>(kInputActionPages.size());
+                 continue;
+             case UIMSG_SelectKeyPage2:
+-                KeyboardPageNum = 2;
++                KeyboardPageNum++;
++                if (KeyboardPageNum > static_cast<int>(kInputActionPages.size()))
++                    KeyboardPageNum = 1;
+                 continue;
+diff --git a/src/Io/KeyboardActionMapping.cpp b/src/Io/KeyboardActionMapping.cpp
+--- a/src/Io/KeyboardActionMapping.cpp
++++ b/src/Io/KeyboardActionMapping.cpp
+@@ -6,6 +6,7 @@
+ #include "Utility/MapAccess.h"
+ 
+ #include "InputEnumFunctions.h"
++#include "InputActionContexts.h"
+@@ -105,10 +106,11 @@ void Io::KeyboardActionMapping::applyKeybindings(const Io::Keybindings &keybindings) {
+-        // A physical gamepad control should belong to one configurable action. Reassigning it
+-        // therefore removes the old gamepad binding instead of leaving both actions active.
++        // A physical gamepad control should belong to one action within a context. The same
++        // button may legitimately be reused in Gameplay, Character, Menu, Dialogue, etc.
+         for (const auto &[otherAction, otherEntry] : _gamepadEntryByInputAction) {
+-            if (otherAction != inputAction && otherEntry->value() == key)
++            if (otherAction != inputAction && otherEntry->value() == key &&
++                inputActionsShareContext(inputAction, otherAction))
+                 otherEntry->setValue(PlatformKey::KEY_NONE);
+         }
+diff --git a/src/Application/GameConfig.h b/src/Application/GameConfig.h
+--- a/src/Application/GameConfig.h
++++ b/src/Application/GameConfig.h
+@@ -398,7 +398,12 @@
+         Key DialogRight = {this, INPUT_ACTION_DIALOG_RIGHT, "dialog_right", PlatformKey::KEY_GAMEPAD_RIGHT, "Dialog right key."};
+         Key DialogSelect = {this, INPUT_ACTION_DIALOG_PRESS, "dialog_select", PlatformKey::KEY_GAMEPAD_A, "Dialog select key."};
+         Key Escape = {this, INPUT_ACTION_ESCAPE, "escape", PlatformKey::KEY_GAMEPAD_B, "Escape key."};
++        Key ToggleMouseLook = {this, INPUT_ACTION_TOGGLE_MOUSE_LOOK, "toggle_mouse_look", PlatformKey::KEY_NONE, "Toggle mouse look key."};
+         Key ToggleWindowMode = {this, INPUT_ACTION_TOGGLE_WINDOW_MODE, "toggle_window_mode", PlatformKey::KEY_NONE, "Toggle window mode key."};
++        Key ArcomagePlayCard = {this, INPUT_ACTION_ARCOMAGE_PLAY_CARD, "arcomage_play", PlatformKey::KEY_GAMEPAD_A, "Play currently selected card."};
++        Key ArcomageDiscard = {this, INPUT_ACTION_ARCOMAGE_DISCARD, "arcomage_discard", PlatformKey::KEY_GAMEPAD_Y, "Discard currently selected card."};
++        Key ArcomageLeft = {this, INPUT_ACTION_ARCOMAGE_LEFT, "arcomage_left", PlatformKey::KEY_GAMEPAD_LEFT, "Select next card to left."};
++        Key ArcomageRight = {this, INPUT_ACTION_ARCOMAGE_RIGHT, "arcomage_right", PlatformKey::KEY_GAMEPAD_RIGHT, "Select next card to right."};
+     };
