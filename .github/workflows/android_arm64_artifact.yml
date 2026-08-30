@@ -35,8 +35,8 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Apply portable contextual mapping patch
-        run: git apply --check portable-patches/0004-contextual-controller-mapping-ui.patch && git apply portable-patches/0004-contextual-controller-mapping-ui.patch
+      - name: Apply contextual controller mapping changes
+        run: python3 portable-patches/apply-contextual-controller-mapping.py
 
       - name: Configure fast APT mirror
         uses: vegardit/fast-apt-mirror.sh@v1
