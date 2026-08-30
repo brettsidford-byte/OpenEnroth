@@ -7,6 +7,10 @@
 
 #include "InputEnumFunctions.h"
 
+#ifdef __ANDROID__
+#include "GUI/GUIWindow.h"
+#endif
+
 std::shared_ptr<Io::KeyboardActionMapping> keyboardActionMapping = nullptr;
 
 extern std::unordered_set<InputAction> key_map_conflicted;  // 506E6C
@@ -15,6 +19,32 @@ namespace {
 bool isGamepadKey(PlatformKey key) {
     return key >= PlatformKey::KEY_GAMEPAD_A && key <= PlatformKey::KEY_GAMEPAD_R2;
 }
+
+#ifdef __ANDROID__
+PlatformKey contextualAndroidGamepadKey(InputAction action, PlatformKey configuredKey) {
+    // The gamepad defaults deliberately reuse face buttons between gameplay and
+    // individual UI screens. Resolve those overlaps by screen instead of letting
+    // one physical press trigger every action that happens to share the key.
+    if (current_screen_type == SCREEN_GAME) {
+        // Y is Jump in the world. Inventory remains available from its keyboard
+        // binding and as Y when the character UI itself is active.
+        if (action == INPUT_ACTION_OPEN_INVENTORY)
+            return PlatformKey::KEY_NONE;
+    }
+
+    if (current_screen_type == SCREEN_MENU) {
+        // New Game remains clickable/touchable, but is intentionally not exposed
+        // as a controller hotkey because its confirmation path can be bypassed by
+        // controller activation. A instead opens the visible Options/Controls entry.
+        if (action == INPUT_ACTION_NEW_GAME)
+            return PlatformKey::KEY_NONE;
+        if (action == INPUT_ACTION_OPEN_OPTIONS)
+            return PlatformKey::KEY_GAMEPAD_A;
+    }
+
+    return configuredKey;
+}
+#endif
 }
 
 //----- (00459C8D) --------------------------------------------------------
@@ -35,18 +65,13 @@ PlatformKey Io::KeyboardActionMapping::keyFor(InputAction action) const {
 }
 
 PlatformKey Io::KeyboardActionMapping::gamepadKeyFor(InputAction action) const {
-#ifdef __ANDROID__
-    // Keep New Game touch-only on Android handhelds and use A for the visible
-    // Controls/Options menu entry. This is deliberately limited to the menu
-    // action mapping, so A remains the normal INTERACT button during gameplay.
-    if (action == INPUT_ACTION_NEW_GAME)
-        return PlatformKey::KEY_NONE;
-    if (action == INPUT_ACTION_OPEN_OPTIONS)
-        return PlatformKey::KEY_GAMEPAD_A;
-#endif
-
     KeyConfigEntry *entry = valueOr(_gamepadEntryByInputAction, action, nullptr);
-    return entry ? entry->value() : PlatformKey::KEY_NONE;
+    PlatformKey configuredKey = entry ? entry->value() : PlatformKey::KEY_NONE;
+#ifdef __ANDROID__
+    return contextualAndroidGamepadKey(action, configuredKey);
+#else
+    return configuredKey;
+#endif
 }
 
 // TODO(captainurist): maybe we need to split InputActions to sets by WindowType so guarantee of only one InputAction per key is restored.
@@ -55,8 +80,15 @@ bool Io::KeyboardActionMapping::isBound(InputAction action, PlatformKey key) con
         return false;
     if (KeyConfigEntry *entry = valueOr(_keyboardEntryByInputAction, action, nullptr); entry && entry->value() == key)
         return true;
-    if (KeyConfigEntry *entry = valueOr(_gamepadEntryByInputAction, action, nullptr); entry && entry->value() == key)
-        return true;
+    if (KeyConfigEntry *entry = valueOr(_gamepadEntryByInputAction, action, nullptr)) {
+#ifdef __ANDROID__
+        if (contextualAndroidGamepadKey(action, entry->value()) == key)
+            return true;
+#else
+        if (entry->value() == key)
+            return true;
+#endif
+    }
     return false;
 }
 
