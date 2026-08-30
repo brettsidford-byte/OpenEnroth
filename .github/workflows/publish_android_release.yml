@@ -4,13 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (for example v1.0.0)"
+        description: "Release tag (for example v1.0.1)"
         required: true
-        default: "v1.0.0"
+        default: "v1.0.1"
       title:
         description: "Release title"
         required: true
-        default: "OpenEnroth — Android Handheld Controller Fork v1.0"
+        default: "OpenEnroth — Android Handheld Controller Fork v1.0.1"
+  push:
+    paths:
+      - ".github/workflows/publish_android_release.yml"
 
 permissions:
   contents: write
@@ -30,7 +33,7 @@ jobs:
           name: OpenEnroth-Android-ARM64
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
-          run-id: 33314574024
+          run-id: 33319677476
           path: release/arm64
 
       - name: Download tested Universal APK artifact
@@ -39,7 +42,7 @@ jobs:
           name: OpenEnroth-Android-Universal
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
-          run-id: 33314574024
+          run-id: 33319677476
           path: release/universal
 
       - name: Prepare release files
@@ -57,47 +60,44 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.tag }}
-          TITLE: ${{ inputs.title }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'v1.0.1' }}
+          TITLE: ${{ github.event_name == 'workflow_dispatch' && inputs.title || 'OpenEnroth — Android Handheld Controller Fork v1.0.1' }}
         shell: bash
         run: |
           cat > release-notes.md <<'EOF'
-          This is the first tested release of the Android Handheld Controller fork of OpenEnroth.
+          Android controller update for the OpenEnroth Android Handheld Controller fork.
 
-          It retains OpenEnroth's existing Android and touchscreen support while adding native physical-controller functionality intended particularly for Android retro handhelds and Android devices used with Bluetooth, USB or integrated gamepads.
+          This release uses the exact ARM64 and Universal APK artefacts produced successfully by Android Release APKs run 33319677476 from runtime commit e2269290d525de2ac399ba0c65c3455cf8e665a1.
 
-          Development and initial hardware testing have been performed on an Anbernic RG405M. The controller implementation uses SDL gamepad input rather than device-specific Android key codes, so other SDL-compatible Android controllers and handhelds should work, although they have not all been individually tested.
+          ## Changes since v1.0.0
 
-          ## Changes
-
-          - Continuous physical gamepad input, including analogue movement, strafing, turning and looking.
-          - Correct gamepad remapping independently from keyboard bindings.
-          - R2 + touchscreen item/world-object inspection using the original right-click information behaviour.
-          - Item information remains visible after lifting the finger and closes when R2 is released.
-          - Suppression of duplicate SDL synthetic touch/mouse events that could otherwise cause an unwanted left click.
-          - Android software-keyboard support for genuine editable fields such as character and save-game naming.
-          - Android soft keyboard is suppressed for non-editable NPC dialogue, including branchless NPC messages.
-          - Ordinary touchscreen behaviour and upstream OpenEnroth Android support are retained.
+          - Gamepad bindings are now separated by active screen context on Android, preventing one physical button from triggering unrelated actions from another UI state.
+          - Y now performs Jump during normal gameplay without simultaneously opening Inventory.
+          - Context-specific face-button reuse is retained for character, menu and other UI screens.
+          - In the in-game menu, A opens the visible Controls/Options entry rather than activating New Game.
+          - New Game remains available through the touchscreen; this avoids the unsafe controller path where the normal confirmation prompt could be bypassed.
+          - Gameplay A remains the normal Interact/Event Trigger action.
+          - All v1.0.0 controller, touchscreen-inspection and Android text-input improvements are retained.
 
           ## Downloads
 
           **OpenEnroth-Android-ARM64.apk — Recommended for modern Android handhelds**
 
-          Smaller ARM64-only package. Use this for the Anbernic RG405M and other ARM64 Android retro handhelds. This is the edition tested successfully on the RG405M.
+          Smaller ARM64-only package. Use this for the Anbernic RG405M and other ARM64 Android retro handhelds.
 
           **OpenEnroth-Android-Universal.apk — Maximum compatibility**
 
-          Larger package intended for broader Android CPU compatibility. Choose this if you are unsure which architecture your Android device uses. It contains the same game functionality; the additional size comes from carrying additional native binaries rather than extra game content.
+          Larger package intended for broader Android CPU compatibility.
 
           `SHA256SUMS.txt` contains checksums for both APKs.
 
           ## Installation
 
-          OpenEnroth does not include the copyrighted Might and Magic VII game data. A legitimate copy of the original game is still required. Follow the OpenEnroth Android installation instructions for supplying the required game files.
+          OpenEnroth does not include the copyrighted Might and Magic VII game data. A legitimate copy of the original game is still required.
 
-          ## Compatibility
+          ## Testing status
 
-          Confirmed on Anbernic RG405M with the ARM64 package, including integrated-controller operation, analogue movement/look, controller remapping, R2 + touchscreen inspection, Android text entry, and suppression of the soft keyboard for non-editable NPC dialogue.
+          The earlier controller, touchscreen inspection and Android text-input features have been tested successfully on an Anbernic RG405M. This new context-separation change has passed both ARM64 and Universal Android CI builds and is being published for device verification before further controller changes.
 
           Other SDL-compatible Android handhelds and Bluetooth/USB controllers are expected to work but have not all been individually verified.
 
@@ -108,7 +108,7 @@ jobs:
             OpenEnroth-Android-ARM64.apk \
             OpenEnroth-Android-Universal.apk \
             SHA256SUMS.txt \
-            --target 91d8676d8e3ae7b69cbc5c373a217d4b2dc9b124 \
+            --target e2269290d525de2ac399ba0c65c3455cf8e665a1 \
             --title "$TITLE" \
             --notes-file release-notes.md \
             --latest
