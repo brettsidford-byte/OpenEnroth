@@ -45,6 +45,6 @@ class SdlEventLoop: public PlatformEventLoop {
     bool _touchUsesRightButton = false;
     bool _rightMouseLatched = false;
     PlatformWindow *_rightMouseWindow = nullptr;
-    Pointi _rightMousePos;
+    Pointi _rightMousePos = {};
 #endif
 };
