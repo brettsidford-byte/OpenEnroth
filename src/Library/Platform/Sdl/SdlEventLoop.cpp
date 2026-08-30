@@ -225,16 +225,33 @@ void SdlEventLoop::dispatchTouchFingerEvent(PlatformEventHandler *eventHandler, 
     switch (event->type) {
     case SDL_EVENT_FINGER_DOWN:
         e.type = EVENT_MOUSE_BUTTON_PRESS;
+#ifdef __ANDROID__
+        _touchUsesRightButton = _rightTriggerHeld;
+        e.button = _touchUsesRightButton ? BUTTON_RIGHT : BUTTON_LEFT;
+        e.buttons = e.button;
+#else
         e.button = BUTTON_LEFT;
-        e.buttons = BUTTON_LEFT; // Not calling SDL_GetMouseState here because if we want buttons to sync up properly
-                                 // then we'd also need to get touch state from inside the mouse event.
+        e.buttons = BUTTON_LEFT;
+#endif
+        // Not calling SDL_GetMouseState here because if we want buttons to sync up properly
+        // then we'd also need to get touch state from inside the mouse event.
         break;
     case SDL_EVENT_FINGER_UP:
         e.type = EVENT_MOUSE_BUTTON_RELEASE;
+#ifdef __ANDROID__
+        e.button = _touchUsesRightButton ? BUTTON_RIGHT : BUTTON_LEFT;
+#else
         e.button = BUTTON_LEFT;
+#endif
         break;
     case SDL_EVENT_FINGER_MOTION:
         e.type = EVENT_MOUSE_MOVE;
+#ifdef __ANDROID__
+        if (_touchUsesRightButton)
+            e.buttons = BUTTON_RIGHT;
+        else
+            e.buttons = BUTTON_LEFT;
+#endif
         break;
     default:
         return;
@@ -243,6 +260,11 @@ void SdlEventLoop::dispatchTouchFingerEvent(PlatformEventHandler *eventHandler, 
     e.pos = Pointi(event->x * e.window->size().w, event->y * e.window->size().h);
 
     dispatchEvent(eventHandler, &e);
+
+#ifdef __ANDROID__
+    if (event->type == SDL_EVENT_FINGER_UP)
+        _touchUsesRightButton = false;
+#endif
 }
 
 void SdlEventLoop::dispatchWindowEvent(PlatformEventHandler *eventHandler, const SDL_WindowEvent *event) {
@@ -345,6 +367,11 @@ void SdlEventLoop::dispatchGamepadAxisEvent(PlatformEventHandler *eventHandler, 
 
     if (!e.gamepad || e.axis == PlatformKey::KEY_NONE)
         return;
+
+#ifdef __ANDROID__
+    if (e.axis == PlatformKey::KEY_GAMEPAD_R2)
+        _rightTriggerHeld = e.value > 0.5f;
+#endif
 
     dispatchEvent(eventHandler, &e);
 }
