@@ -18,7 +18,7 @@ diff --git a/src/GUI/UI/UIGame.cpp b/src/GUI/UI/UIGame.cpp
  
      key_map_conflicted.clear();
 -    curr_key_map = keyboardActionMapping->currentKeybindings(KEYBINDINGS_CONFIGURABLE);
-+    curr_key_map = keyboardActionMapping->currentKeybindings(KEYBINDINGS_ALL);
++    curr_key_map = keyboardActionMapping->currentGamepadKeybindings(KEYBINDINGS_ALL);
  }
 @@ -386,7 +387,8 @@ void GUIWindow_GameKeyBindings::Update() {
          bool anyConflicts = false;
@@ -98,7 +98,7 @@ diff --git a/src/Application/GameMenu.cpp b/src/Application/GameMenu.cpp
  
              case UIMSG_ResetKeyMapping: {
 -                curr_key_map = keyboardActionMapping->defaultKeybindings(KEYBINDINGS_CONFIGURABLE);
-+                curr_key_map = keyboardActionMapping->defaultKeybindings(KEYBINDINGS_ALL);
++                curr_key_map = keyboardActionMapping->defaultGamepadKeybindings(KEYBINDINGS_ALL);
                  keyboardActionMapping->applyKeybindings(curr_key_map);
                  key_map_conflicted.clear();
                  pAudioPlayer->playUISound(SOUND_chimes);
@@ -117,6 +117,18 @@ diff --git a/src/Application/GameMenu.cpp b/src/Application/GameMenu.cpp
 +                if (KeyboardPageNum > static_cast<int>(kInputActionPages.size()))
 +                    KeyboardPageNum = 1;
                  continue;
+diff --git a/src/Io/KeyboardActionMapping.h b/src/Io/KeyboardActionMapping.h
+--- a/src/Io/KeyboardActionMapping.h
++++ b/src/Io/KeyboardActionMapping.h
+@@ -30,6 +30,8 @@ class KeyboardActionMapping {
+ 
+     [[nodiscard]] Keybindings currentKeybindings(KeybindingsQuery query) const;
+     [[nodiscard]] Keybindings defaultKeybindings(KeybindingsQuery query) const;
++    [[nodiscard]] Keybindings currentGamepadKeybindings(KeybindingsQuery query) const;
++    [[nodiscard]] Keybindings defaultGamepadKeybindings(KeybindingsQuery query) const;
+     void applyKeybindings(const Keybindings &keybindings);
+ 
+  private:
 diff --git a/src/Io/KeyboardActionMapping.cpp b/src/Io/KeyboardActionMapping.cpp
 --- a/src/Io/KeyboardActionMapping.cpp
 +++ b/src/Io/KeyboardActionMapping.cpp
@@ -125,7 +137,28 @@ diff --git a/src/Io/KeyboardActionMapping.cpp b/src/Io/KeyboardActionMapping.cpp
  
  #include "InputEnumFunctions.h"
 +#include "InputActionContexts.h"
-@@ -105,10 +106,11 @@ void Io::KeyboardActionMapping::applyKeybindings(const Io::Keybindings &keybindings) {
+@@ -91,6 +92,24 @@ Io::Keybindings Io::KeyboardActionMapping::defaultKeybindings(KeybindingsQuery query) const {
+     return result;
+ }
+ 
++Io::Keybindings Io::KeyboardActionMapping::currentGamepadKeybindings(KeybindingsQuery query) const {
++    Io::Keybindings result;
++    for (const auto &[inputAction, configEntry] : _gamepadEntryByInputAction)
++        if (query == KEYBINDINGS_ALL || (query == KEYBINDINGS_CONFIGURABLE && allConfigurableInputActions().contains(inputAction)))
++            result.emplace(inputAction, configEntry->value());
++    return result;
++}
++
++Io::Keybindings Io::KeyboardActionMapping::defaultGamepadKeybindings(KeybindingsQuery query) const {
++    Io::Keybindings result;
++    for (const auto &[inputAction, configEntry] : _gamepadEntryByInputAction)
++        if (query == KEYBINDINGS_ALL || (query == KEYBINDINGS_CONFIGURABLE && allConfigurableInputActions().contains(inputAction)))
++            result.emplace(inputAction, configEntry->defaultValue());
++    return result;
++}
++
+ void Io::KeyboardActionMapping::applyKeybindings(const Io::Keybindings &keybindings) {
+@@ -105,10 +124,11 @@ void Io::KeyboardActionMapping::applyKeybindings(const Io::Keybindings &keybindings) {
 -        // A physical gamepad control should belong to one configurable action. Reassigning it
 -        // therefore removes the old gamepad binding instead of leaving both actions active.
 +        // A physical gamepad control should belong to one action within a context. The same
