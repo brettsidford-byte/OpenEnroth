@@ -162,6 +162,14 @@ void SdlEventLoop::dispatchMouseMoveEvent(PlatformEventHandler *eventHandler, co
     if (event->windowID == 0)
         return; // This happens.
 
+#ifdef __ANDROID__
+    // SDL already generates virtual mouse events for touchscreen input. We handle
+    // SDL touch events ourselves below, so forwarding these as well would make a
+    // single finger tap arrive twice (including as a synthetic left click).
+    if (event->which == SDL_TOUCH_MOUSEID)
+        return;
+#endif
+
     PlatformMouseEvent e;
     e.type = EVENT_MOUSE_MOVE;
     e.window = _state->window(event->windowID);
@@ -177,6 +185,14 @@ void SdlEventLoop::dispatchMouseMoveEvent(PlatformEventHandler *eventHandler, co
 void SdlEventLoop::dispatchMouseButtonEvent(PlatformEventHandler *eventHandler, const SDL_MouseButtonEvent *event) {
     if (event->windowID == 0)
         return; // This happens.
+
+#ifdef __ANDROID__
+    // Ignore SDL's virtual mouse copy of a touchscreen event. The original touch
+    // event is converted explicitly in dispatchTouchFingerEvent(), which lets R2
+    // replace the normal tap with a right-click instead of receiving both.
+    if (event->which == SDL_TOUCH_MOUSEID)
+        return;
+#endif
 
     PlatformMouseEvent e;
     e.type = event->type == SDL_EVENT_MOUSE_BUTTON_UP ? EVENT_MOUSE_BUTTON_RELEASE : EVENT_MOUSE_BUTTON_PRESS;
